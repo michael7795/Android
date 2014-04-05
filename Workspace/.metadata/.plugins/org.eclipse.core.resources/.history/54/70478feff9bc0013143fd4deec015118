@@ -1,0 +1,186 @@
+package com.example.projectceler;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import android.annotation.SuppressLint;
+import android.app.Activity;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
+import android.net.wifi.ScanResult;
+import android.net.wifi.WifiConfiguration;
+import android.net.wifi.WifiInfo;
+import android.net.wifi.WifiManager;
+import android.os.AsyncTask;
+import android.os.Bundle;
+import android.view.View;
+import android.view.View.OnClickListener;
+import android.widget.ArrayAdapter;
+import android.widget.Button;
+import android.widget.ListView;
+import android.widget.TextView;
+import android.widget.Toast;
+
+
+public class MainActivity extends Activity {
+	
+	private Button connectButton;
+	private WifiManager wifiManager;
+	private WifiScanReceiver wifiReceiver;
+	private ListView list;
+	private TextView currentWifiTextView;
+	private List<ScanResult> wifiScanList;
+	private List<WifiConfiguration> wifiConfiguredList;
+	private ArrayList<WifiConfiguration> finalNetworks = new ArrayList<WifiConfiguration>();
+	private ArrayList<ScanResult> finalScanResults = new ArrayList<ScanResult>();;
+	private String scanWifis[];
+	private String configuredWifis[];
+	private int currentNetwork = 0;
+	private boolean canBegin = false;
+	private boolean noMore = false;
+	
+	protected void onCreate(Bundle savedInstanceState) {
+		super.onCreate(savedInstanceState);
+		setContentView(R.layout.activity_main);
+		list = (ListView)findViewById(R.id.listView1);
+		currentWifiTextView = (TextView)findViewById(R.id.currentWifi);
+		wifiManager = (WifiManager) getSystemService(Context.WIFI_SERVICE); 
+		wifiReceiver = new WifiScanReceiver();
+	   	turnWifiOn();
+		connectButton = (Button) findViewById(R.id.connectToNetwork);
+	   	createListener();
+	}
+	
+	public void turnWifiOn(){
+	  while (!wifiManager.isWifiEnabled()){
+		   wifiManager.setWifiEnabled(true);
+	  }
+	  wifiManager.disconnect();
+	}
+	
+	public void createListener(){
+		connectButton.setOnClickListener(new OnClickListener() {
+		    @Override
+		    public void onClick(View view) {
+		    	Toast.makeText(MainActivity.this, "Starting test!", Toast.LENGTH_SHORT).show();
+		    	currentNetwork = 0;
+		    	finalNetworks.clear();
+		    	wifiManager.startScan();
+		    	new getNetworks().execute();
+		    }
+		});	
+	}
+	
+	private class getNetworks extends AsyncTask <Void,Void,Void>{
+		@Override
+		protected Void doInBackground(Void... params) {
+		   		wifiConfiguredList = wifiManager.getConfiguredNetworks();
+		   		wifiScanList = wifiManager.getScanResults();
+		   		for (ScanResult scannedWifi: wifiScanList){
+		   			for (WifiConfiguration configuredWifi : wifiConfiguredList){
+		   				if (configuredWifi.SSID.substring(1, configuredWifi.SSID.length() - 1).equals(scannedWifi.SSID)){
+		   					if (!finalNetworks.contains(configuredWifi)){
+			   					finalNetworks.add(configuredWifi);
+			   					finalScanResults.add(scannedWifi);
+		   					}
+		   				}
+		   			}
+		   		}
+		   		for (WifiConfiguration finalWifi: finalNetworks){
+		   			System.out.println("Wifi: " + finalWifi.SSID);
+		   		}
+		    	//createListView();
+		    	//alreadyScanned = true;
+		   		canBegin = true;
+		    	new connectToNetwork().execute(finalNetworks.get(currentNetwork));
+		    	currentNetwork = currentNetwork + 1;
+		    	//connectToNetwork(finalNetworks.get(1));			
+				return null;
+		}
+		
+		@Override
+		protected void onPostExecute(Void result) {
+	    	 System.out.println("WE GOT HERE!");
+			   scanWifis = new String[finalNetworks.size()];
+			   	for(int i = 0; i < finalNetworks.size(); i++){
+			   		scanWifis[i] = ((finalNetworks.get(i)).SSID);
+			   	}
+			   	
+			   	list.setAdapter(new ArrayAdapter<String>(getApplicationContext(),
+			   			android.R.layout.simple_list_item_1,scanWifis));	
+		}
+		
+
+	 }
+	
+	private class connectToNetwork extends AsyncTask <WifiConfiguration,Void,Void>{
+		@Override
+		protected Void doInBackground(WifiConfiguration... params) {
+			wifiManager.disconnect();
+			wifiManager.enableNetwork(params[0].networkId, true);
+			wifiManager.reconnect();   
+			return null;
+		}
+		
+		protected void onPostExecute(Void result) {
+			//WEIRD off by one here...
+			currentWifiTextView.setText(finalNetworks.get(currentNetwork - 1).SSID);
+		}
+	}
+	
+   protected void onPause() {
+      unregisterReceiver(wifiReceiver);
+      super.onPause();
+   }
+   
+   protected void onResume() {
+      //registerReceiver(wifiReceiver, new IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION));
+	   registerReceiver(wifiReceiver, new IntentFilter(WifiManager.NETWORK_STATE_CHANGED_ACTION));
+	   super.onResume();
+   }
+
+   public void createListView(){
+		   scanWifis = new String[finalNetworks.size()];
+	   	for(int i = 0; i < finalNetworks.size(); i++){
+	   		scanWifis[i] = ((finalNetworks.get(i)).SSID);
+	   	}
+	   	list.setAdapter(new ArrayAdapter<String>(getApplicationContext(),
+	   			android.R.layout.simple_list_item_1,scanWifis));
+   }
+   
+   
+   public void runTest(){
+	   while((int) wifiManager.getConnectionInfo().getLinkSpeed() == -1){
+	   
+	   }
+	   System.out.println("Link Speed of " + wifiManager.getConnectionInfo().getSSID() + " IS " + wifiManager.getConnectionInfo().getLinkSpeed());
+   }
+   
+   class WifiScanReceiver extends BroadcastReceiver {
+	   @Override
+	   public void onReceive(Context context, final Intent intent) {
+		   //System.out.println("Working with: " + wifiManager.getConnectionInfo().getSSID());
+	       ConnectivityManager cm = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+	       NetworkInfo wifi = cm.getNetworkInfo(ConnectivityManager.TYPE_WIFI);
+	       if (currentNetwork == 0 && wifi.isConnected()){
+	    	   runTest();
+
+	       }
+	       if (wifi.isConnected() && wifiManager.getConnectionInfo().getSupplicantState().toString() == "COMPLETED" && canBegin == true && currentNetwork != finalNetworks.size()) {
+	    	   System.out.println("Current Network #: " + currentNetwork);
+	    	   new connectToNetwork().execute(finalNetworks.get(currentNetwork));
+	    	   //System.out.println("Connected To: " + wifiManager.getConnectionInfo().getSSID());
+	    	   currentNetwork = currentNetwork + 1;
+	    	   runTest();
+	       }
+	   }
+	       
+
+	       
+
+   }
+}
