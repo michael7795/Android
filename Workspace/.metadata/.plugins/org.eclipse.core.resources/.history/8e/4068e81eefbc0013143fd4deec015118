@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="app_name">Project Celer</string>
+    <string name="action_settings">Settings</string>
+    <string name="status">Nothing Happening Yet!</string>
+    <string name="num_networks"># Networks</string>
+    <string name="current_network">None</string>
+    <string name="title_activity_list_wifi">Wifi Title!</string>
+    
+    
+</resources>
